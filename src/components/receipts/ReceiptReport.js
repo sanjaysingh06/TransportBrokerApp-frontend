@@ -67,9 +67,9 @@ export default function ReceiptReport() {
     fetchAccounts();
   }, []);
 
-  const transportAccounts = accounts.filter((a) => a.account_type === 4);
-  const partyAccounts = accounts.filter((a) => a.account_type === 3);
-  const deliveryAccounts = accounts.filter((a) => a.account_type === 5);
+  const transportAccounts = accounts.filter((a) => a.account_type === 2);
+  const partyAccounts = accounts.filter((a) => a.account_type === 1);
+  const deliveryAccounts = accounts.filter((a) => a.account_type === 3);
 
   // Fetch receipts from API with optional filters
   const fetchReceipts = async (appliedFilters = filters) => {
