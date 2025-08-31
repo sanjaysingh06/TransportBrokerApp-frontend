@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:8000/api"; // adjust your backend URL
+const API_URL = "https://transportbrokerapp-backend.onrender.com/api"; // adjust your backend URL
 
 // Export as default object so we can import as AccountService
 const AccountService = {

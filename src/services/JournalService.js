@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:8000/api"; // Adjust to your backend URL
+const API_URL = "https://transportbrokerapp-backend.onrender.com/api"; // Adjust to your backend URL
 
 const JournalService = {
   // Fetch all journal entries
