@@ -227,7 +227,7 @@ const AccountManager = () => {
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm:3 }}>
             <TextField
               fullWidth
               label="Account Name"
@@ -236,7 +236,7 @@ const AccountManager = () => {
             />
           </Grid>
 
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm:3}}>
             <FormControl fullWidth>
               <InputLabel>Category</InputLabel>
               <Select
@@ -255,7 +255,7 @@ const AccountManager = () => {
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm:3}}>
             <TextField
               fullWidth
               type="number"
@@ -267,7 +267,7 @@ const AccountManager = () => {
             />
           </Grid>
 
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm:3}}>
             <Button
               sx={{ height: "100%" }}
               type="submit"
@@ -290,6 +290,7 @@ const AccountManager = () => {
             pagination: { paginationModel: { pageSize: 5 } },
           }}
           getRowId={(row) => row.id}
+          showToolbar 
         />
       </Paper>
 

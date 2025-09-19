@@ -169,6 +169,7 @@ export default function ReceiptPage() {
           }}
           pageSizeOptions={[5, 10, 25]}
           disableRowSelectionOnClick
+          showToolbar 
         />
       </Box>
 
