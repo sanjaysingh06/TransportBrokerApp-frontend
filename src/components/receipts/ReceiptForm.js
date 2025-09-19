@@ -94,9 +94,31 @@ const ReceiptForm = ({ initialData, onSaved, onClose }) => {
   }, [initialData, accounts]);
 
   // Filter accounts by type
-  const transportAccounts = accounts.filter((a) => a.account_type === 2);
-  const partyAccounts = accounts.filter((a) => a.account_type === 1);
-  const deliveryAccounts = accounts.filter((a) => a.account_type === 3);
+  // const transportAccounts = accounts.filter((a) => a.account_type === 2);
+  // const partyAccounts = accounts.filter((a) => a.account_type === 1);
+  // const deliveryAccounts = accounts.filter((a) => a.account_type === 3);
+
+  // Filter accounts based on type & only show child accounts
+  const transportAccounts = accounts.filter(
+    (a) =>
+      a.account_type === 2 && 
+      a.parent_name?.includes("Transport Accounts") &&
+      !a.is_system // optional: hide system parent if needed
+  );
+
+  const partyAccounts = accounts.filter(
+    (a) =>
+      a.account_type === 1 &&
+      a.parent_name?.includes("Party Accounts") &&
+      !a.is_system
+  );
+
+   const deliveryAccounts = accounts.filter(
+    (a) => a.parent_name?.includes("Delivery Accounts") && a.account_type === 2
+  );
+
+   
+  
 
   // Auto-calculations
   useEffect(() => {
@@ -167,11 +189,10 @@ const ReceiptForm = ({ initialData, onSaved, onClose }) => {
 
       if (initialData?.id) {
         await ReceiptService.updateReceipt(initialData.id, payload);
-        alert("✅ Receipt updated successfully!");
       } else {
         await ReceiptService.createReceipt(payload);
-        alert("✅ Receipt saved successfully!");
       }
+
 
       setForm(initialForm);
       if (onSaved) onSaved();
@@ -519,22 +540,6 @@ const ReceiptForm = ({ initialData, onSaved, onClose }) => {
         </Grid>
 
 
-        {/* Payment Type */}
-        {/* <Grid item xs={6} md={3}>
-          <TextField
-            label="Payment Type"
-            name="payment_type"
-            value={form.payment_type}
-            onChange={handleChange}
-            select
-            fullWidth
-          >
-            <MenuItem value="cash">Cash</MenuItem>
-            <MenuItem value="bank">Bank</MenuItem>
-            <MenuItem value="upi">UPI</MenuItem>
-          </TextField>
-        </Grid> */}
-
         {/* Submit */}
         <Grid size={{ xs: 12, md:12 }}>
           <Button
@@ -557,3 +562,5 @@ const ReceiptForm = ({ initialData, onSaved, onClose }) => {
 };
 
 export default ReceiptForm;
+
+

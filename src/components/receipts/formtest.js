@@ -1,32 +1,38 @@
-// src/components/receipts/ReceiptForm.js
-import React, { useState } from "react";
-
-// import Box from '@mui/material/Box';
-// import TextField from '@mui/material/TextField';
-import { styled } from '@mui/material/styles';
-import OutlinedInput from '@mui/material/OutlinedInput';
-import InputAdornment from '@mui/material/InputAdornment';
-
+import React, { useState, useEffect } from "react";
 import {
-  Paper,
   Typography,
   Grid,
   TextField,
   Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Divider,
   Box,
+  Autocomplete,
+  InputAdornment,
 } from "@mui/material";
+import { styled } from "@mui/material/styles";
 import ReceiptService from "../../services/ReceiptService";
+import AccountService from "../../services/AccountService";
 
-const initial = {
+// Custom styled TextField
+const ExtraSmallTextField = styled(TextField)(({ theme }) => ({
+  "& .MuiInputBase-root": {
+    height: "31px",
+    fontSize: "0.85rem",
+    padding: "0 8px",
+  },
+  "& .MuiInputBase-input": {
+    padding: "6px 8px",
+  },
+  "& .MuiFormLabel-root": {
+    fontSize: "0.85rem",
+  },
+}));
+
+const initialForm = {
   receipt_no: "",
   date: "",
-  transport_name: "",
-  party_name: "",
+  transport_account_id: null,
+  party_account_id: null,
+  delivery_person_id: null,
   gr_no: "",
   container: "",
   pkgs: "",
@@ -39,45 +45,109 @@ const initial = {
   other: "",
   remark: "",
   delivery_date: "",
-  delivery_person: "",
   delivery_rate: "",
   delivery_charge: "",
-  payment_type: "",
+  total: 0,
 };
 
-const Item = styled(Paper)(({ theme }) => ({
-  backgroundColor: '#fff',
-  ...theme.typography.body2,
-  padding: theme.spacing(1),
-  textAlign: 'center',
-  color: (theme.vars ?? theme).palette.text.secondary,
-  ...theme.applyStyles('dark', {
-    backgroundColor: '#1A2027',
-  }),
-}));
+const num = (v) => (v === "" || isNaN(v) ? 0 : Number(v));
 
-const num = (v) => (v === "" || v === null || v === undefined ? 0 : Number(v));
-
-const ReceiptForm = ({ onSaved }) => {
-  const [form, setForm] = useState(initial);
+const ReceiptForm = ({ initialData, onSaved, onClose }) => {
+  const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+
+  // Fetch accounts
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const res = await AccountService.getAccounts();
+        setAccounts(res.data || []);
+      } catch (err) {
+        console.error("❌ Failed to fetch accounts:", err);
+      }
+    };
+    fetchAccounts();
+  }, []);
+
+  // Prefill form for edit
+  useEffect(() => {
+    if (initialData && accounts.length > 0) {
+      setForm({
+        ...initialForm,
+        ...initialData,
+        transport_account_id: initialData.transport_account?.id || null,
+        party_account_id: initialData.party_account?.id || null,
+        delivery_person_id: initialData.delivery_person?.id || null,
+      });
+    } else if (!initialData) {
+      setForm(initialForm);
+    }
+  }, [initialData, accounts]);
+
+  // Filter accounts based on hierarchy
+  const transportAccounts = accounts.filter(
+    (a) => a.parent_name?.includes("Transport Accounts") && a.account_type === 2
+  );
+  const partyAccounts = accounts.filter(
+    (a) => a.parent_name?.includes("Party Accounts") && a.account_type === 1
+  );
+  const deliveryAccounts = accounts.filter(
+    (a) => a.parent_name?.includes("Delivery Accounts") && a.account_type === 2
+  );
+
+  // Auto-calculations
+  useEffect(() => {
+    const pkgs = num(form.pkgs);
+    const pkg_rate = num(form.pkg_rate);
+    const delivery_rate = num(form.delivery_rate);
+
+    const cartage = pkgs * pkg_rate;
+    const delivery_charge = pkgs * delivery_rate;
+
+    const total =
+      num(form.freight) +
+      num(form.comm) +
+      cartage +
+      num(form.labour) +
+      num(form.other) +
+      delivery_charge;
+
+    setForm((prev) => ({
+      ...prev,
+      cartage,
+      delivery_charge,
+      total,
+    }));
+  }, [
+    form.pkgs,
+    form.pkg_rate,
+    form.freight,
+    form.comm,
+    form.labour,
+    form.other,
+    form.delivery_rate,
+  ]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAccountChange = (field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value ? value.id : null,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
       const payload = {
-        receipt_no: form.receipt_no,
-        date: form.date || null,
-        transport_name: form.transport_name || null,
-        party_name: form.party_name || null,
-        gr_no: form.gr_no || null,
-        container: form.container || null,
+        ...form,
         pkgs: num(form.pkgs),
         weight: num(form.weight),
         freight: num(form.freight),
@@ -86,554 +156,355 @@ const ReceiptForm = ({ onSaved }) => {
         cartage: num(form.cartage),
         labour: num(form.labour),
         other: num(form.other),
-        delivery_date: form.delivery_date || null,
-        delivery_person: form.delivery_person || null,
         delivery_rate: num(form.delivery_rate),
         delivery_charge: num(form.delivery_charge),
-        payment_type: form.payment_type || null,
-        remark: form.remark || null,
+        total: num(form.total),
       };
 
-      await ReceiptService.createReceipt(payload);
-      alert("Receipt saved successfully!");
-      setForm(initial);
+      if (initialData?.id) {
+        await ReceiptService.updateReceipt(initialData.id, payload);
+        alert("✅ Receipt updated successfully!");
+      } else {
+        await ReceiptService.createReceipt(payload);
+        alert("✅ Receipt saved successfully!");
+      }
+
+      setForm(initialForm);
       if (onSaved) onSaved();
+      if (onClose) onClose();
     } catch (err) {
-      console.error("Failed to save receipt:", err?.response?.data || err);
-      alert("Failed to save receipt. Check console for details.");
+      console.error("❌ Failed to save receipt:", err.response?.data || err);
+      alert("Failed to save receipt. Check console.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Paper sx={{ p: 3, mb: 4 }} elevation={3}>
-      <Typography variant="h6" gutterBottom>
-        New Receipt
-      </Typography>
+    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+      <Grid container spacing={0.9} alignItems="center">
+        {/* Date & Receipt No */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Date"
+            type="date"
+            name="date"
+            value={form.date}
+            onChange={handleChange}
+            InputLabelProps={{ shrink: true }}
+            required
+            fullWidth
+            size="small"
+          />
+        </Grid>
 
-      {/* Receipt Info */}
-        <Box >
-            <Grid container spacing={1}>
-            <Grid size={{ xs: 6, md: 2 }} offset={{ xs: 3, md: 0 }}>
-                <TextField
-                    // label="Size"
-                    id="outlined-size-small"
-                    defaultValue="Date"
-                    size="small"
-                    required
-                    fullWidth
-                />
-            </Grid>
-            <Grid size={{ xs: 4, md: 2 }} offset={{ md: 8 }}>
-                <TextField
-                    // label="Size"
-                    id="outlined-size-small"
-                    defaultValue="Serial No"
-                    size="small"
-                />
-            </Grid>
-            
-            {/* </Grid>
-            <Grid container spacing={2}> */}
-            {/* Line 2 */}
-            <Grid size={{ xs: 6, md: 2 }}>
-                <TextField
-                    label="Receipt No"
-                    name="receipt_no"
-                    value={form.receipt_no}
-                    onChange={handleChange}
-                    id="outlined-size-small"
-                    size="small"
-                    type="number"
-                />
-            </Grid>
-            <Grid size={{ xs: 6, md: 5 }}>
-                <TextField
-                    label="Transport A/C"
-                    name=""
-                    id="outlined-size-small"
-                    size="small"
-                    fullWidth
-                    select
-                />
-            </Grid>
-            <Grid size={{ xs: 6, md: 5 }}>
-                <TextField
-                    label="Party A/C"
-                    name=""
-                    id="outlined-size-small"
-                    size="small"
-                    fullWidth
-                    select
-                />
-            </Grid>
-            
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Receipt No"
+            name="receipt_no"
+            value={form.receipt_no}
+            onChange={handleChange}
+            required
+            fullWidth
+            size="small"
+            disabled={!!initialData}
+          />
+        </Grid>
 
-            {/* Line 3 */}
-            <Grid size={{ xs: 6, md: 3 }}>
-                <TextField
-                    label="G R No"
-                    id="outlined-size-small"
-                    size="small"
-                    type="number"
-                />
-            </Grid>
-            <Grid size={{ xs: 6, md: 3 }}>
-                <TextField
-                    label="Contain"
-                    name=""
-                    id="outlined-size-small"
-                    size="small"
-                />
-            </Grid>
-            <Grid size={{ xs: 6, md: 2 }}>
-              <TextField
-                label="Weight"
-                id="outlined-start-adornment"
-                size="small"
+        {/* Transport Account */}
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Autocomplete
+            options={transportAccounts}
+            getOptionLabel={(option) => option.name}
+            value={
+              transportAccounts.find((acc) => acc.id === form.transport_account_id) ||
+              null
+            }
+            onChange={(e, newValue) =>
+              handleAccountChange("transport_account_id", newValue)
+            }
+            isOptionEqualToValue={(option, value) => option.id === value?.id}
+            renderInput={(params) => (
+              <ExtraSmallTextField
+                {...params}
+                label="Transport Account"
                 fullWidth
-                // sx={{ m: 1, width: '25ch' }}
-                slotProps={{
-                  input: {
-                    startAdornment: <InputAdornment position="start">kg</InputAdornment>,
-                  },
-                }}
-              />
-            </Grid>
-            <Grid size={{ xs: 6, md: 2 }}>
-                <TextField
-                    label="Pkgs"
-                    name=""
-                    id="outlined-size-small"
-                    size="small"
-                    type="number"
-                    fullWidth
-                />
-            </Grid>
-            <Grid size={{ xs: 6, md: 2 }}>
-              <TextField
-                  label="Pkgs rate"
-                  name=""
-                  id="outlined-size-small"
-                  size="small"
-                  type="number"
-                  fullWidth
-                />
-            </Grid>
-
-            <Divider />
-            {/* sx={{ my: 1 }}  */}
-
-            {/* Line 4 */}
-            <Grid size={{ xs: 6, md: 2 }} offset={{ xs: 3, md: 10 }}>
-              <FormControl fullWidth >
-                <InputLabel htmlFor="outlined-adornment-amount">Freight</InputLabel>
-                <OutlinedInput
-                  id="outlined-size-small"
-                  startAdornment={<InputAdornment position="start">₹</InputAdornment>}
-                  label="Freight"
-                  size="small"
-                  type="number"
-                />
-              </FormControl>
-            </Grid>
-
-            {/* Line 5 */}
-            <Grid size={{ xs: 6, md: 2 }} offset={{ xs: 3, md: 10 }}>
-              <FormControl fullWidth >
-                <InputLabel htmlFor="outlined-adornment-amount">Cartage</InputLabel>
-                <OutlinedInput
-                  id="outlined-size-small"
-                  startAdornment={<InputAdornment position="start">₹</InputAdornment>}
-                  label="Cartage"
-                  size="small"
-                  type="number"
-                />
-              </FormControl>
-            </Grid>
-
-            {/* Line 7 */}
-            <Grid size={{ xs: 6, md: 2 }} offset={{ xs: 3, md: 10 }}>
-              <FormControl fullWidth >
-                <InputLabel htmlFor="outlined-adornment-amount">Commission</InputLabel>
-                <OutlinedInput
-                  id="outlined-size-small"
-                  startAdornment={<InputAdornment position="start">₹</InputAdornment>}
-                  label="Commission"
-                  size="small"
-                  type="number"
-                />
-              </FormControl>
-            </Grid>
-
-            {/* Line 6 */}
-            <Grid size={{ xs: 6, md: 2 }} offset={{ xs: 3, md: 10 }}>
-              <FormControl fullWidth >
-                <InputLabel htmlFor="outlined-adornment-amount">Cartage</InputLabel>
-                <OutlinedInput
-                  id="outlined-size-small"
-                  startAdornment={<InputAdornment position="start">₹</InputAdornment>}
-                  label="Cartage"
-                  size="small"
-                  type="number"
-                />
-              </FormControl>
-            </Grid>
-
-            {/* Line 7 */}
-            <Grid size={{ xs: 6, md: 2 }} offset={{ xs: 3, md: 10 }}>
-              <FormControl fullWidth >
-                <InputLabel htmlFor="outlined-adornment-amount">Labour</InputLabel>
-                <OutlinedInput
-                  id="outlined-size-small"
-                  startAdornment={<InputAdornment position="start">₹</InputAdornment>}
-                  label="Labour"
-                  size="small"
-                  type="number"
-                />
-              </FormControl>
-            </Grid>
-
-            {/* Line 7 */}
-            <Grid size={{ xs: 6, md: 2 }} offset={{ xs: 3, md: 10 }}>
-                <FormControl fullWidth >
-                  <InputLabel htmlFor="outlined-adornment-amount">Other</InputLabel>
-                  <OutlinedInput
-                    id="outlined-size-small"
-                    startAdornment={<InputAdornment position="start">₹</InputAdornment>}
-                    label="Other"
-                    size="small"
-                    type="number"
-                  />
-                </FormControl>
-            </Grid>
-
-            {/* Line 8 */}
-            <Grid size={{ xs: 6, md: 2 }} offset={{ xs: 3, md: 10 }}>
-                <FormControl fullWidth >
-                  <InputLabel htmlFor="outlined-adornment-amount">Total</InputLabel>
-                  <OutlinedInput
-                    id="outlined-size-small"
-                    startAdornment={<InputAdornment position="start">₹</InputAdornment>}
-                    label="Total"
-                    size="small"
-                    type="number"
-                  />
-                </FormControl>
-            </Grid>
-
-            
-            {/* Line 10 */}
-            <Grid size={{ xs: 12,  md: 12}}>
-                <TextField
-                    label="Remarks"
-                    id="outlined-size-small"
-                    size="small"
-                    fullWidth
-                />
-            </Grid>
-
-            {/* Shipment */}
-            <Grid size={{ xs: 6, md: 2 }}>
-              <TextField
-                  label="Delivery Date"
-                  id="outlined-size-small"
-                  size="small"
-                  fullWidth
-              />
-            </Grid>
-            <Grid size={{ xs: 6, md: 5 }}>
-                <TextField
-                    label="Delivery Person A/C"
-                    name=""
-                    id="outlined-size-small"
-                    size="small"
-                    fullWidth
-                    select
-                />
-            </Grid>
-            <Grid size={{ xs: 6, md: 3 }}>
-              <TextField
-                  label="Delivery Pkgs Rate "
-                  name=""
-                  id="outlined-size-small"
-                  size="small"
-                  type="number"
-                  fullWidth
-              />
-            </Grid>
-            <Grid size={{ xs: 6, md: 2 }}>
-              <FormControl fullWidth >
-                <InputLabel htmlFor="outlined-adornment-amount">Delivery Charge</InputLabel>
-                <OutlinedInput
-                  id="outlined-size-small"
-                  startAdornment={<InputAdornment position="start">₹</InputAdornment>}
-                  label="Delivery Charge"
-                  size="small"
-                  type="number"
-                />
-              </FormControl>
-            </Grid>
-          </Grid>
-        </Box>
-
-
-      <Divider sx={{ my: 3 }} />
-
-
-      <Box component="form" onSubmit={handleSubmit}>
-        {/* Receipt Info */}
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="Receipt No"
-              name="receipt_no"
-              value={form.receipt_no}
-              onChange={handleChange}
-              fullWidth
-              required
-              id="outlined-size-small"
                 size="small"
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="Date"
-              type="date"
-              name="date"
-              value={form.date}
-              onChange={handleChange}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              required
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="GR No"
-              name="gr_no"
-              value={form.gr_no}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="Container"
-              name="container"
-              value={form.container}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
+              />
+            )}
+          />
         </Grid>
 
-        <Divider sx={{ my: 3 }} />
-
-        {/* Accounts */}
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <TextField
-              label="Transport Account"
-              name="transport_name"
-              value={form.transport_name}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              label="Party Account"
-              name="party_name"
-              value={form.party_name}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
+        {/* Party Account */}
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Autocomplete
+            options={partyAccounts}
+            getOptionLabel={(option) => option.name}
+            value={partyAccounts.find((acc) => acc.id === form.party_account_id) || null}
+            onChange={(e, newValue) =>
+              handleAccountChange("party_account_id", newValue)
+            }
+            isOptionEqualToValue={(option, value) => option.id === value?.id}
+            renderInput={(params) => (
+              <ExtraSmallTextField
+                {...params}
+                label="Party Account"
+                fullWidth
+                size="small"
+              />
+            )}
+          />
         </Grid>
 
-        <Divider sx={{ my: 3 }} />
-
-        {/* Shipment */}
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Pkgs"
-              name="pkgs"
-              type="number"
-              value={form.pkgs}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Weight"
-              name="weight"
-              type="number"
-              value={form.weight}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Pkg Rate"
-              name="pkg_rate"
-              type="number"
-              value={form.pkg_rate}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
+        {/* Delivery Person */}
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Autocomplete
+            options={deliveryAccounts}
+            getOptionLabel={(option) => option.name}
+            value={deliveryAccounts.find(
+              (acc) => acc.id === form.delivery_person_id
+            ) || null}
+            onChange={(e, newValue) =>
+              handleAccountChange("delivery_person_id", newValue)
+            }
+            isOptionEqualToValue={(option, value) => option.id === value?.id}
+            renderInput={(params) => (
+              <ExtraSmallTextField
+                {...params}
+                label="Delivery Person"
+                fullWidth
+                size="small"
+              />
+            )}
+          />
         </Grid>
 
-        <Divider sx={{ my: 3 }} />
-
-        {/* Charges */}
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="Freight"
-              name="freight"
-              type="number"
-              value={form.freight}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="Commission"
-              name="comm"
-              type="number"
-              value={form.comm}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="Cartage"
-              name="cartage"
-              type="number"
-              value={form.cartage}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="Labour"
-              name="labour"
-              type="number"
-              value={form.labour}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              label="Other"
-              name="other"
-              type="number"
-              value={form.other}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
+        {/* GR, Container, Pkgs, Weight */}
+        <Grid size={{ xs: 6, md: 3 }}>
+          <ExtraSmallTextField
+            label="GR No"
+            name="gr_no"
+            value={form.gr_no}
+            onChange={handleChange}
+            fullWidth
+            size="small"
+            type="number"
+          />
+        </Grid>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <ExtraSmallTextField
+            label="Container"
+            name="container"
+            value={form.container}
+            onChange={handleChange}
+            fullWidth
+            size="small"
+          />
+        </Grid>
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Weight"
+            name="weight"
+            value={form.weight}
+            onChange={handleChange}
+            type="number"
+            fullWidth
+            size="small"
+            InputProps={{
+              endAdornment: <InputAdornment position="end">kg</InputAdornment>,
+            }}
+          />
+        </Grid>
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Pkgs"
+            name="pkgs"
+            value={form.pkgs}
+            onChange={handleChange}
+            type="number"
+            fullWidth
+            size="small"
+          />
         </Grid>
 
-        <Divider sx={{ my: 3 }} />
-
-        {/* Delivery */}
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Delivery Date"
-              type="date"
-              name="delivery_date"
-              value={form.delivery_date}
-              onChange={handleChange}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Delivery Person"
-              name="delivery_person"
-              value={form.delivery_person}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Delivery Rate"
-              name="delivery_rate"
-              type="number"
-              value={form.delivery_rate}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Delivery Charge"
-              name="delivery_charge"
-              type="number"
-              value={form.delivery_charge}
-              onChange={handleChange}
-              fullWidth
-            />
-          </Grid>
+        {/* PKG Rate */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Pkg Rate"
+            name="pkg_rate"
+            value={form.pkg_rate}
+            onChange={handleChange}
+            type="number"
+            fullWidth
+            size="small"
+          />
         </Grid>
 
-        <Divider sx={{ my: 3 }} />
-
-        {/* Payment + Remark */}
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel id="payment-type-label">Payment Type</InputLabel>
-              <Select
-                labelId="payment-type-label"
-                name="payment_type"
-                value={form.payment_type}
-                onChange={handleChange}
-              >
-                <MenuItem value="">—</MenuItem>
-                <MenuItem value="cash">Cash</MenuItem>
-                <MenuItem value="bank">Bank</MenuItem>
-                <MenuItem value="upi">UPI</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} md={8}>
-            <TextField
-              label="Remark"
-              name="remark"
-              value={form.remark}
-              onChange={handleChange}
-              fullWidth
-              multiline
-              rows={2}
-            />
-          </Grid>
+        {/* Freight */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Freight"
+            name="freight"
+            value={form.freight}
+            onChange={handleChange}
+            type="number"
+            fullWidth
+            size="small"
+            InputProps={{
+              startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+            }}
+          />
         </Grid>
 
-        <Button
-          type="submit"
-          variant="contained"
-          sx={{ mt: 3 }}
-          disabled={loading}
-        >
-          {loading ? "Saving..." : "Save Receipt"}
-        </Button>
-      </Box>
-    </Paper>
+        {/* Cartage */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Cartage"
+            name="cartage"
+            value={form.cartage}
+            type="number"
+            fullWidth
+            size="small"
+            InputProps={{
+              startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+              readOnly: true,
+            }}
+          />
+        </Grid>
+
+        {/* Commission */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Commission"
+            name="comm"
+            value={form.comm}
+            type="number"
+            fullWidth
+            size="small"
+            onChange={handleChange}
+            InputProps={{
+              startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+            }}
+          />
+        </Grid>
+
+        {/* Labour */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Labour"
+            name="labour"
+            value={form.labour}
+            type="number"
+            fullWidth
+            size="small"
+            onChange={handleChange}
+            InputProps={{
+              startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+            }}
+          />
+        </Grid>
+
+        {/* Other */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Other"
+            name="other"
+            value={form.other}
+            type="number"
+            fullWidth
+            size="small"
+            onChange={handleChange}
+            InputProps={{
+              startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+            }}
+          />
+        </Grid>
+
+        {/* Delivery Rate */}
+        <Grid size={{ xs: 6, md: 3 }}>
+          <ExtraSmallTextField
+            label="Delivery Rate"
+            name="delivery_rate"
+            value={form.delivery_rate}
+            onChange={handleChange}
+            type="number"
+            fullWidth
+            size="small"
+          />
+        </Grid>
+
+        {/* Delivery Charge */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Delivery Charge"
+            name="delivery_charge"
+            value={form.delivery_charge}
+            type="number"
+            fullWidth
+            size="small"
+            InputProps={{
+              startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+              readOnly: true,
+            }}
+          />
+        </Grid>
+
+        {/* Total */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Total"
+            name="total"
+            value={form.total}
+            type="number"
+            fullWidth
+            size="small"
+            InputProps={{
+              startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+              readOnly: true,
+            }}
+          />
+        </Grid>
+
+        {/* Remarks */}
+        <Grid size={{ xs: 12, md: 12 }}>
+          <ExtraSmallTextField
+            label="Remarks"
+            name="remark"
+            value={form.remark}
+            onChange={handleChange}
+            fullWidth
+            size="small"
+          />
+        </Grid>
+
+        {/* Delivery Date */}
+        <Grid size={{ xs: 6, md: 2 }}>
+          <ExtraSmallTextField
+            label="Delivery Date"
+            type="date"
+            name="delivery_date"
+            value={form.delivery_date}
+            onChange={handleChange}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+            size="small"
+          />
+        </Grid>
+
+        {/* Submit */}
+        <Grid size={{ xs: 12, md: 12 }}>
+          <Button
+            variant="contained"
+            type="submit"
+            disabled={loading}
+            fullWidth
+            size="small"
+          >
+            {loading ? "Saving..." : initialData ? "Update Receipt" : "Save Receipt"}
+          </Button>
+        </Grid>
+      </Grid>
+    </Box>
   );
 };
 

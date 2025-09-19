@@ -12,14 +12,30 @@ import {
 import { Add, Edit, Delete, Refresh } from "@mui/icons-material";
 import ReceiptService from "../../services/ReceiptService";
 import dayjs from "dayjs";
+import ConfirmDialog from "../../components/common/ConfirmDialog";
 
 // Import your ReceiptForm component
 import ReceiptForm from "./ReceiptForm";
+
+import { Snackbar, Alert } from "@mui/material";
 
 export default function ReceiptPage() {
   const [receipts, setReceipts] = useState([]);
   const [openForm, setOpenForm] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
+
+  // Notification state
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    id: null,
+  });
+
 
   const fetchReceipts = async () => {
     try {
@@ -34,15 +50,45 @@ export default function ReceiptPage() {
     fetchReceipts();
   }, []);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this receipt?")) return;
+  // const handleDelete = async (id) => {
+  //   if (!window.confirm("Are you sure you want to delete this receipt?")) return;
+  //   try {
+  //     await ReceiptService.deleteReceipt(id);
+  //     fetchReceipts();
+  //     setSnackbar({ open: true, message: "Receipt deleted successfully!", severity: "success" });
+  //   } catch (err) {
+  //     console.error("Error deleting receipt:", err);
+  //     setSnackbar({ open: true, message: "Failed to delete receipt", severity: "error" });
+  //   }
+  // };
+
+  const handleDeleteClick = (id) => {
+    setConfirmDialog({
+      open: true,
+      id: id,
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
     try {
-      await ReceiptService.deleteReceipt(id);
+      await ReceiptService.deleteReceipt(confirmDialog.id);
       fetchReceipts();
+      setSnackbar({
+        open: true,
+        message: "Receipt deleted successfully!",
+        severity: "success",
+      });
     } catch (err) {
       console.error("Error deleting receipt:", err);
+      setSnackbar({
+        open: true,
+        message: "Failed to delete receipt",
+        severity: "error",
+      });
     }
   };
+
+
 
   const formatNumber = (v) =>
     v !== null && v !== undefined && !isNaN(v) ? Number(v).toFixed(2) : "0.00";
@@ -78,9 +124,14 @@ export default function ReceiptPage() {
           >
             <Edit fontSize="small" />
           </IconButton>
-          <IconButton color="error" size="small" onClick={() => handleDelete(params.row?.id)}>
+          <IconButton
+            color="error"
+            size="small"
+            onClick={() => handleDeleteClick(params.row?.id)}
+          >
             <Delete fontSize="small" />
           </IconButton>
+
         </Box>
       ),
       sortable: false,
@@ -142,10 +193,35 @@ export default function ReceiptPage() {
             onSaved={() => {
               setOpenForm(false);
               fetchReceipts();
+              setSnackbar({ open: true, message: "Receipt saved successfully!", severity: "success" });
             }}
           />
         </DialogContent>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+      
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title="Delete Receipt"
+        message="Are you sure you want to delete this receipt? This action cannot be undone."
+        onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}
+        onConfirm={handleDeleteConfirm}
+      />
+
     </Box>
   );
 }

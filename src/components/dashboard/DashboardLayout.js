@@ -10,11 +10,11 @@ const menuItems = [
   { text: "Receipts", icon: <Receipt />, path: "/receipts" },
   { text: "Receipt Report", icon: <ListAlt />, path: "/report" },
   { text: "Accounts", icon: <AccountBalance />, path: "/accounts" },
-  { text: "Account Types", icon: <AccountBalance />, path: "/account-types" },
+  // { text: "Account Types", icon: <AccountBalance />, path: "/account-types" },
   { text: "Journal", icon: <Book />, path: "/journal" },
   { text: "Ledger", icon: <ListAlt />, path: "/ledger" },
-  { text: "Ledger Report", icon: <Assessment />, path: "/ledger-report" },
-  { text: "Trial Balance", icon: <Assessment />, path: "/trial-balance" },
+  // { text: "Ledger Report", icon: <Assessment />, path: "/ledger-report" },
+  // { text: "Trial Balance", icon: <Assessment />, path: "/trial-balance" },
 ];
 
 export default function DashboardLayout() {
