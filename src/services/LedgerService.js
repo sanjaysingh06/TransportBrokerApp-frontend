@@ -1,11 +1,11 @@
 import JournalService from "./JournalService";
 
-// We reuse JournalService to fetch all journal entries
 const LedgerService = {
+  // Fetch all ledger entries via JournalService
   getLedgerEntries: async () => {
     try {
-      const res = await JournalService.getJournalEntries();
-      return res.data;
+      const entries = await JournalService.getJournalEntries(); // already response.data
+      return entries; 
     } catch (error) {
       console.error("Error fetching ledger entries:", error);
       throw error;
