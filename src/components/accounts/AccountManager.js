@@ -20,8 +20,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 const CATEGORY_MAP = {
-  Transport: { typeCode: "ASSET", parentCode: "2100" },
-  Party: { typeCode: "LIAB", parentCode: "1100" },
+  Party : { typeCode: "ASSET", parentCode: "2100" },
+  Transport : { typeCode: "LIAB", parentCode: "1100" },
   Delivery: { typeCode: "LIAB", parentCode: "1200" },
   Income: { typeCode: "INC", parentCode: "501" },
   Expense: { typeCode: "EXP", parentCode: "601" },
