@@ -13,19 +13,20 @@ import {
   ListItemText,
   Button,
   IconButton,
+  useMediaQuery,
 } from "@mui/material";
 import {
   Dashboard,
   Receipt,
   AccountBalance,
-  Assessment,
   Book,
   ListAlt,
   DarkMode,
   LightMode,
+  Menu as MenuIcon,
 } from "@mui/icons-material";
 import { Link, Outlet, useNavigate } from "react-router-dom";
-import { AuthContext } from "../../context/AuthContext"; 
+import { AuthContext } from "../../context/AuthContext";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 
 const drawerWidth = 240;
@@ -43,15 +44,13 @@ export default function DashboardLayout() {
   const { logout } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  // ✅ Dark/Light Mode State
+  // Dark/Light Mode
   const [mode, setMode] = useState("light");
-
-  // ✅ Create theme dynamically
   const theme = useMemo(
     () =>
       createTheme({
         palette: {
-          mode: mode,
+          mode,
           ...(mode === "dark"
             ? {
                 background: {
@@ -65,27 +64,63 @@ export default function DashboardLayout() {
     [mode]
   );
 
+  // Responsive Drawer
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  const toggleMode = () => {
-    setMode((prevMode) => (prevMode === "light" ? "dark" : "light"));
-  };
+  const drawerContent = (
+    <Box sx={{ overflow: "auto" }}>
+      <Toolbar />
+      <List>
+        {menuItems.map((item, index) => (
+          <ListItem key={index} disablePadding>
+            <ListItemButton
+              component={Link}
+              to={item.path}
+              onClick={() => isMobile && setMobileOpen(false)} // auto-close on mobile
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ display: "flex" }}>
-        {/* ✅ AppBar with Logout + Dark/Light toggle */}
-        <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+        {/* ✅ AppBar */}
+        <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
           <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
-            <Typography variant="h6" noWrap component="div">
-              Transport Broker App
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {isMobile && (
+                <IconButton
+                  color="inherit"
+                  edge="start"
+                  onClick={handleDrawerToggle}
+                  sx={{ mr: 2 }}
+                >
+                  <MenuIcon />
+                </IconButton>
+              )}
+              <Typography variant="h6" noWrap>
+                Transport Broker App
+              </Typography>
+            </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <IconButton color="inherit" onClick={toggleMode}>
+              <IconButton color="inherit" onClick={() => setMode((m) => (m === "light" ? "dark" : "light"))}>
                 {mode === "light" ? <DarkMode /> : <LightMode />}
               </IconButton>
               <Button color="inherit" onClick={handleLogout} sx={{ textTransform: "none" }}>
@@ -95,40 +130,44 @@ export default function DashboardLayout() {
           </Toolbar>
         </AppBar>
 
-        {/* Sidebar Drawer */}
-        <Drawer
-          variant="permanent"
-          sx={{
-            width: drawerWidth,
-            flexShrink: 0,
-            "& .MuiDrawer-paper": {
+        {/* ✅ Drawer */}
+        {isMobile ? (
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={handleDrawerToggle}
+            ModalProps={{ keepMounted: true }}
+            sx={{
+              "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box" },
+            }}
+          >
+            {drawerContent}
+          </Drawer>
+        ) : (
+          <Drawer
+            variant="permanent"
+            sx={{
               width: drawerWidth,
-              boxSizing: "border-box",
-            },
+              flexShrink: 0,
+              "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box" },
+            }}
+          >
+            {drawerContent}
+          </Drawer>
+        )}
+
+        {/* ✅ Main Content */}
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            bgcolor: "background.default",
+            p: 3,
+            minHeight: "100vh",
           }}
         >
           <Toolbar />
-          <Box sx={{ overflow: "auto" }}>
-            <List>
-              {menuItems.map((item, index) => (
-                <ListItem key={index} disablePadding>
-                  <ListItemButton component={Link} to={item.path}>
-                    <ListItemIcon>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.text} />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-        </Drawer>
-
-        {/* Main Content */}
-        <Box
-          component="main"
-          sx={{ flexGrow: 1, bgcolor: "background.default", p: 3 }}
-        >
-          <Toolbar />
-          <Outlet /> {/* Nested routes render here */}
+          <Outlet />
         </Box>
       </Box>
     </ThemeProvider>
